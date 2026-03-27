@@ -57,6 +57,40 @@ bash -c "$(curl -fsSLk https://waf.chaitin.com/release/latest/manager.sh)" -- --
 
 Note: During this it will give you an administrative user+password, write this down somewhere because you'll be needing it to log into the safeline browser controls
 
+### Memory Error
+During this time, when I tried to install Safeline I also got this error 'Remaining memory is less than 1 GB', even though I had just initialized my machiene and allocated at least 40 GB worth of memory. After some investigation the core root was that my logical volume group (lv) only had little memory left. To do a quick explaination the VM currently stores it's memory in the allocated RAM you give it, when the RAM is nearly becoming full it does this thing called 'swapping' where it writes the RAM memory to disk. Since I set up using logical volume it would be allocated to my logical volume on the disk through these steps:
+1. My disk (40GB) gets separated into partitions
+2. Partitions then gets converted into physical volume (pvs), which then can be combined in a volume group (vgs)
+3. Volume groups then get dynamically allocated into Logical Volumes (lvs) to be memory for different functions in the VM, whether it's running the os, retaining backups, holds files..etc
+
+![image of memory structure](../vm_screenshots/volumes_graph.png)
+
+To do this I must expand memory in this order Partition --> Physical Volume --> Logical Volume (Volume group gets dynamically allocated with physical volume so you don't need to manually do it)
+
+```
+#note for me my filesystem was in sda3, your's can be in either sda1 or sda2 so make sure to use this command to check which one was actually being used for safeline
+
+lsblk
+
+#usually theres 2 around 1.x G and 1M these are for booting the service and padding for alignment you dont need to worry about them
+
+# expand partition
+growpart /dev/sda 3 #remember to have the space between sda and your number
+
+# update physical volume on new space
+pvresize /dev/sda3
+
+# expand logical volume from physical volume, lvs only refer to their vgs not their pvs. Also instead of "-l +100%FREE" you can use "-L +xG" where x is your number of GiBs, for more controlled expansion.
+
+lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv 
+
+# expand filesystem inside lvs
+resize2fs /dev/ubuntu-vg/ubuntu-lv
+
+```
+
+And after that I could install safeline
+
 ### If your main link doesn't install everything
 **For Docker:**
 
