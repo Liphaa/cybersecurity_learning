@@ -81,7 +81,7 @@ sudo apt install wazuh-manager=4.14.4-1
 
 In which after that it worked fine.
 
-## Adding File Integrit Checks
+## Adding File Integrity Checks
 This is pretty easy, all you need to do is edit the configuration
 
 1. Run Notepad as Administrator
