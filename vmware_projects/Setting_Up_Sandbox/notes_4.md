@@ -7,7 +7,7 @@ Things you will need:
 
 Flare VM is basically kinda like the Swiss Knife of digital forensics and analysts it has all the major tools you need to do a successful analyse on a file both static and dynamic. I'm gonna be letting you know the things I did as well as things you can learn from me.
 
-## Installing FlareVM
+## Installing FlareVM / Hardening your VM
 1. Open Powershell as administrator on your virtual machine
 2. Download a new installer script, this will be held to your desktop files
 ```
@@ -46,7 +46,7 @@ Set-ExecutionPolicy Unrestricted -Scope CurrentUser -Force
 Now you're done and you have an sandbox to play around with :)
 
 
-## Using your VM
+## Using your VM (starting with Static Analysis)
 Now you have your VM set up let's get to actually using your VM, I have some malware I downloaded from 
 [this link](https://github.com/ytisf/thezoo) for analysis. PLEASE be careful handling these as these are legitimate and will mess up your machine so I do not suggest double clicking on an executable file (luckily all of them are zipped so it prevents this) because it runs it. BE VERY CAFEFUL HANDLING UNZIPPED MALWARE. For now we will focus on static analysis and move on to dynamic analysis later
 
@@ -75,7 +75,7 @@ So we can see from this that the
 
 Since this folder came with multiple files I also ran it through malware analysis.
 
-## Manual Analysis
+## Manual Static Analysis
 Now that we got a general idea of what it does lets go in and take a look of the code to check if its a PE (portable executable), whether it's packed, version details, import details. We want to find both the architecture and the behavior of the code.
 
 ### File Structure Analysis
@@ -116,4 +116,57 @@ Here are some things I found:
 - XML code for privilege escalation
 - part of a POST method for encoded data 
 
-This is all I have so far, I will come back and continue to analyse tomorrow...
+Now we'll use FLOSS in order to get a deeper extraction on obfuscated strings. It does this through simulating a running environment and extracting any strings that could be there during runtime. To prevent static strings from showing up again I run the commmand
+```
+floss --no static -- path/to/malware
+```
+Some things I picked up from there:
+- Something called  "ineIGenu" which seems to be a rearranged word of "IGenuine". A quick Google search lead me to a training institution in India for programming, could be coincidental or could be a lead only further investigation is needed.
+- Attempted access of ProgramData\
+- An error for a string being too long
+- The number 5120 being brough up again which i estimate is the port number the program is trying to reach
+
+
+### Extracting Metadata
+We will be using a tool today called exiftool which extracts metadata from the files, sometimes this can reveal things as origin dates, authors and other important information about the malware.
+
+To start simply download [exiftool by Phil Harvey](https://exiftool.org/), unzip the folder and rename "exiftool(-k).exe" to "exiftool.exe". Right click on the foldername in the path bar on the top of the page and select "copy address as text" and go to cmd and type "cd " followed by pasting your pathname in there. For example my exiftool folder that i downloaded was called "exiftool-13.55_32" and it was located in my program files so I ran these following commands
+
+```
+cd C:\Program Files\exiftool-13.55_32
+
+exiftools path/to/your/malware <-- put the path to your malware file you want to analyse here
+```
+
+From this I was able to gather the metadata of the file. Such as:
+
+- It was created (supposedly this also could be spoofed) on the 28 March 2021 but what is interesting is the modified time is exactly the same. This be due a variety of reasons such as the file being downloaded for the zoo, created during runtime..etc. There is also a date for the 28 October 2020 which was when the PDB was modified so I do suspect it was created a bit earlier.
+- The path we found earlier for D:\Mktmp\Release\NL1.pdb was the program database for the file, this would of easily contained very useful information about the malware including username, project name, release types..etc.
+- The entry point for where the malware (or dropper) runs is 0xea9a
+
+## Dynamic Analysis
+Static analysis is a good safe way to analyse the malware but usually the behavior, dynamically created files as well as external connections only show through running the malware. Here are some things we will look at:
+- Process Behaviour
+- Registry changes
+- Process Monitoring
+- Connection requests
+
+We will also be using some tools that have been packaged with Flare VM. 
+1. Process Monitor (for process monitoring)
+2. System Informer (for live snapshots)
+3. FakeNet (for connection request logging)
+4. RegShot (for registry changes snapshots)
+
+Also important note: before you do anything please keep a snapshot of the program before it is run so you can revert back any damages or changes. Also make sure your device is not connected to the network and correctly hardened (see the beginning of this guide).
+
+1) I decided to keep all my files in the same place for easy access, this is just done by right clicking your home screen and selecting new folder. You can use the filepath "\Users\<device username>\Desktop\<foldername>" as the path to refer to when sending your folders
+2) For fakenet, process monitor and system informer you can just boot up normally and save to the folder after it's finished connecting
+3) For Regshot open and edit 'Output path' to your folder and click '1st Shot', this will usually take a bit since it's basically making a screenshot of your entire registry. After the virus has finished running click '2nd shot' to see the difference
+4) Rename your virus file to add a '.exe' at the end and run it and watch on the tools for any specific changes
+5) After a bit of time go into system informer and right click on the malware process and select "Terminate" then go to "File > Save" on all the opened tools. For Fakenet just do ctrl+c and it should save the most recent file in "C:\Tools\fakenet\fakenet3.5" it should be a few txt files and a '.pcap' file.
+6) Now you have all the information you need let's look through the files to see if we can find anything useful
+- The main malware file runs two main subfiles one is 'gbudn.exe' and 'rundll32.exe' which is a Windows system processes that runs dynamic link library (dll) files which may include payload that executes the tasks.
+- The malware attempts to access a domain called "mynexa .io" which may be a remote command and control (C2) for further instructions. It attempts to do this multiple times and posts html form data containing the infected devices id, version, operating system, hostname, username, priveledge level and other data.
+- Whilst it does this it also gathers system and environment data (registry, COM objects, shell paths, and privilege/trust information) to maintain an updated profile of the infected host
+
+Unfortunately due to this being an old malware it's been long dismantled so I doubt the command and control center is no longer operating which means we can't see what commands are given. Without seeing the application directly we were able to analyse the behaviours, patterns and effects of this malware. The final step you should do is to revert your machine back to a 'clean' snapshot and you have successfully done static and dynamic analysis to confirm that the malware is a RAT.
